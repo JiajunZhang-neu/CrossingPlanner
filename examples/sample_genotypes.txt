@@ -1,0 +1,26 @@
+# Example parental genotypes for Fly Crossing Planner
+# Paste into the GUI female / male fields.
+
+# --- Classic balancer cross ---
+# Female:
+w ; Sp / CyO ; TM3, Sb / MKRS
+
+# Male:
+w / Y ; + / CyO ; + / TM6B, Tb
+
+# --- X-linked only ---
+# Female:
+w / w[+]
+
+# Male:
+w / Y
+
+# --- Linked loci (set RF e.g. 0.1 in the GUI) ---
+# Female:
+a b / + +
+
+# Male:
+a b / Y
+
+# Extra lethals field example:
+# myLethal, anotherLethal
