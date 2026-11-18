@@ -12,3 +12,6 @@ _test_cross.pptx
 *.pdf
 *.lnk
 results/
+build/
+dist/
+*.spec

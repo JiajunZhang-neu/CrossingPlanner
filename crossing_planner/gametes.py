@@ -8,6 +8,7 @@ from itertools import product
 from typing import Iterable
 
 from .genotype import ChromosomePair, Genotype, Haplotype, SexChromRole
+from .phenotype import chromosome_suppressed, translocation_indices
 
 
 @dataclass(frozen=True)
@@ -155,10 +156,14 @@ def generate_gametes(genotype: Genotype, rf: Fraction) -> list[Gamete]:
     """Cartesian product of per-chromosome haplotype contributions."""
     per_chr: list[list[tuple[Haplotype, Fraction]]] = []
     roles: list[SexChromRole] = []
+    suppressed = translocation_indices(genotype.pairs)
 
-    for pair in genotype.pairs:
+    for index, pair in enumerate(genotype.pairs):
         roles.append(pair.role)
-        per_chr.append(haplotypes_from_pair(pair, rf, genotype.sex))
+        rf_here = rf
+        if genotype.sex == "male" or chromosome_suppressed(pair) or index in suppressed:
+            rf_here = Fraction(0)
+        per_chr.append(haplotypes_from_pair(pair, rf_here, genotype.sex))
 
     gametes: list[Gamete] = []
     for combo in product(*per_chr):

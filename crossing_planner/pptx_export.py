@@ -1,4 +1,4 @@
-"""Export a single-page PowerPoint crossing scheme."""
+"""Export crossing schemes to PowerPoint, one slide per step plus an overview."""
 
 from __future__ import annotations
 
@@ -10,125 +10,127 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 from .cross import CrossResult
-from .format_frac import format_individual_compact, format_individual_fraction
+from .format_frac import ReportLine, format_cross_lines
+from .i18n import tr
+from .scheme import SchemeResult
 
 
-def export_crossing_pptx(result: CrossResult, path: str | Path) -> Path:
-    """
-    Write a one-slide PPTX summarizing parents and viable F1 genotypes.
-    """
+_LINES_PER_SLIDE = 28
+
+
+def export_crossing_pptx(
+    result: CrossResult,
+    path: str | Path,
+    *,
+    choices: list[int] | None = None,
+    picks: list[str] | None = None,
+    show_fraction: bool = True,
+    show_compact: bool = True,
+    show_phenotype: bool = True,
+) -> Path:
+    """Slides matching the result window: every chromosome option, plus the current checks."""
     path = Path(path)
-    prs = Presentation()
-    # Widescreen 16:9
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
-
-    blank = prs.slide_layouts[6]  # blank
-    slide = prs.slides.add_slide(blank)
-
-    # Title
-    _add_textbox(
-        slide,
-        Inches(0.5),
-        Inches(0.25),
-        Inches(12.3),
-        Inches(0.5),
-        "Crossing Scheme",
-        font_size=28,
-        bold=True,
-        align=PP_ALIGN.CENTER,
+    prs = _blank_presentation()
+    lines = format_cross_lines(
+        result,
+        title=tr("ppt_single_title"),
+        choices=choices,
+        picks=picks,
+        show_fraction=show_fraction,
+        show_compact=show_compact,
+        show_phenotype=show_phenotype,
     )
-
-    # Parents
-    parent_text = f"♀  {result.female_raw}\n×\n♂  {result.male_raw}"
-    _add_textbox(
-        slide,
-        Inches(0.5),
-        Inches(0.85),
-        Inches(12.3),
-        Inches(1.0),
-        parent_text,
-        font_size=16,
-        align=PP_ALIGN.CENTER,
-        font_name="Consolas",
-    )
-
-    # Arrow / F1 label
-    _add_textbox(
-        slide,
-        Inches(0.5),
-        Inches(1.85),
-        Inches(12.3),
-        Inches(0.35),
-        "↓  F1  ↓",
-        font_size=18,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-    )
-
-    # F1 body
-    body_lines: list[str] = []
-    if not result.offspring:
-        body_lines.append("No viable offspring.")
-    else:
-        for i, ind in enumerate(result.offspring, 1):
-            body_lines.append(f"[{i}]  {format_individual_compact(ind)}")
-            # Include stacked fraction (may be multi-line)
-            frac = format_individual_fraction(ind)
-            for line in frac.splitlines():
-                body_lines.append("     " + line)
-            if ind.phenotype_hints:
-                body_lines.append(
-                    "     phenotype: " + ", ".join(ind.phenotype_hints)
-                )
-            body_lines.append("")
-
-    body = "\n".join(body_lines).rstrip() + "\n"
-    _add_textbox(
-        slide,
-        Inches(0.6),
-        Inches(2.25),
-        Inches(12.1),
-        Inches(4.5),
-        body,
-        font_size=11,
-        align=PP_ALIGN.LEFT,
-        font_name="Consolas",
-    )
-
-    # Footer
-    footer_parts = [
-        f"Viable classes: {result.viable_count}",
-        f"RF={result.rf}",
-    ]
-    if result.lethal_discarded_probability > 0:
-        footer_parts.append(
-            "Homozygous lethal classes excluded and ratios re-normalized."
-        )
-    _add_textbox(
-        slide,
-        Inches(0.5),
-        Inches(6.9),
-        Inches(12.3),
-        Inches(0.4),
-        "  |  ".join(footer_parts),
-        font_size=10,
-        align=PP_ALIGN.CENTER,
-        color=(0x55, 0x55, 0x55),
-    )
-
+    _add_line_slides(prs, lines, tr("ppt_single_title"))
     prs.save(str(path))
     return path
 
 
-def _style_paragraph(p, *, font_size: int, bold: bool, align, font_name: str, color) -> None:
-    p.alignment = align
-    for run in p.runs:
-        run.font.size = Pt(font_size)
-        run.font.bold = bold
-        run.font.name = font_name
-        if color is not None:
-            run.font.color.rgb = RGBColor(*color)
+def export_scheme_pptx(
+    scheme: SchemeResult,
+    path: str | Path,
+    *,
+    choices: dict[str, list[int]] | None = None,
+    picks: dict[str, list[str]] | None = None,
+    show_fraction: bool = True,
+    show_compact: bool = True,
+    show_phenotype: bool = True,
+) -> Path:
+    """Overview, then each step's chromosome options drawn with the current view flags."""
+    path = Path(path)
+    prs = _blank_presentation()
+    _add_line_slides(prs, _overview_lines(scheme), tr("ppt_plan_title"))
+    choices = choices or {}
+    picks = picks or {}
+    for step in scheme.steps:
+        title = tr("wave_step", wave=step.wave + 1, name=step.step.display_name())
+        lines = format_cross_lines(
+            step.result,
+            title=title,
+            scope=step.step.id,
+            choices=choices.get(step.step.id),
+            picks=picks.get(step.step.id),
+            show_fraction=show_fraction,
+            show_compact=show_compact,
+            show_phenotype=show_phenotype,
+        )
+        _add_line_slides(prs, lines, title)
+    prs.save(str(path))
+    return path
+
+
+def _blank_presentation() -> Presentation:
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    return prs
+
+
+def _overview_lines(scheme: SchemeResult) -> list[ReportLine]:
+    lines = [ReportLine(tr("overview_title")), ReportLine(tr("overview_hint")), ReportLine("")]
+    by_id = {step.step.id: step for step in scheme.steps}
+    for wave_number, wave in enumerate(scheme.waves, 1):
+        lines.append(ReportLine(tr("wave_heading", n=wave_number)))
+        for step_id in wave:
+            step = by_id[step_id]
+            lines.append(ReportLine(f"  {step.step.display_name()}"))
+            lines.append(ReportLine(f"    ♀  {step.female_text}"))
+            lines.append(ReportLine(f"    ♂  {step.male_text}"))
+            lines.append(
+                ReportLine(tr("overview_parents", rf=step.step.rf, count=step.result.viable_count))
+            )
+        lines.append(ReportLine(""))
+    return lines
+
+
+def _add_line_slides(prs: Presentation, lines: list[ReportLine], title: str) -> None:
+    if not lines:
+        lines = [ReportLine(title)]
+    chunks = [lines[index : index + _LINES_PER_SLIDE] for index in range(0, len(lines), _LINES_PER_SLIDE)]
+    for chunk_index, chunk in enumerate(chunks):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        heading = title if len(chunks) == 1 else f"{title}  ({chunk_index + 1}/{len(chunks)})"
+        _add_textbox(
+            slide,
+            Inches(0.45),
+            Inches(0.22),
+            Inches(12.4),
+            Inches(0.4),
+            [ReportLine(heading)],
+            font_size=22,
+            bold=True,
+            align=PP_ALIGN.LEFT,
+        )
+        _add_textbox(
+            slide,
+            Inches(0.45),
+            Inches(0.7),
+            Inches(12.4),
+            Inches(6.5),
+            chunk,
+            font_size=12,
+            align=PP_ALIGN.LEFT,
+            font_name="Consolas",
+        )
 
 
 def _add_textbox(
@@ -137,31 +139,23 @@ def _add_textbox(
     top,
     width,
     height,
-    text: str,
+    lines: list[ReportLine],
     *,
     font_size: int = 14,
     bold: bool = False,
     align=PP_ALIGN.LEFT,
     font_name: str = "Calibri",
-    color: tuple[int, int, int] | None = None,
 ) -> None:
     box = slide.shapes.add_textbox(left, top, width, height)
-    tf = box.text_frame
-    tf.word_wrap = True
-    lines = text.split("\n")
-    first = True
-    for line in lines:
-        if first:
-            p = tf.paragraphs[0]
-            first = False
-        else:
-            p = tf.add_paragraph()
-        p.text = line
-        _style_paragraph(
-            p,
-            font_size=font_size,
-            bold=bold,
-            align=align,
-            font_name=font_name,
-            color=color,
-        )
+    frame = box.text_frame
+    frame.word_wrap = True
+    for index, line in enumerate(lines):
+        paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+        paragraph.alignment = align
+        run = paragraph.add_run()
+        run.text = line.text
+        run.font.size = Pt(font_size)
+        run.font.bold = bold
+        run.font.name = font_name
+        if line.color:
+            run.font.color.rgb = RGBColor.from_string(line.color)

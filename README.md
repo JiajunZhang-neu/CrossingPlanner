@@ -50,16 +50,18 @@ Linked loci with recombination (set RF in the GUI, e.g. `0.1`):
 
 - Independent assortment of chromosome pairs
 - Sex chromosomes (XX / XY)
-- Simple adjacent-locus recombination (global RF, default `0` = complete linkage; male Drosophila: no recombination)
-- Homozygous lethal exclusion (built-in balancers such as CyO, TM3, TM6B, FM7, … plus optional extra alleles)
-- Dominant marker phenotype hints (genotypes remain the primary output)
-- F1 ratios as exact `fractions.Fraction` values, re-normalized after removing lethals
+- Simple adjacent-locus recombination (global RF, default `0` = complete linkage)
+- Males do not recombine. A whole-chromosome balancer on a female chromosome also blocks recombination there. MRS and MKRS only balance proximal chromosome 3, so other loci still use RF
+- Marker catalog (bristles, wings, appendages, eye shape, eye color, body) and balancer recognition (FM, CyO, SM, TM, MRS/MKRS, CyO-TM9)
+- Homozygous lethal classes dropped; FM7c/FM7c females stay in the ratio and are marked sterile
+- F1 classes colored by distinguishable phenotype. The same visible traits share a color
 - Fraction and compact genotype views
-- Single-slide `.pptx` export
+- Parallel waves and multi-step crosses in one window
+- PowerPoint export of the genotypes selected in the results, using the current view checkboxes
 
 ## GUI
 
-1. Enter ♀ and ♂ genotypes
-2. Optionally set RF and extra lethal alleles
-3. Click **计算 F1**
-4. Click **导出 PPT…** to save the crossing scheme
+1. Add stocks, then add one or more crosses. Crosses in the same wave run in parallel
+2. Optionally set each cross's RF and any extra lethal alleles
+3. Click **计算方案**
+4. Click **导出方案 PPT…** to save the plan

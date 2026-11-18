@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum, auto
 
+from .i18n import tr
+
 
 class SexChromRole(Enum):
     AUTOSOME = auto()
@@ -65,8 +67,28 @@ class Genotype:
 
 
 def _split_chromosomes(text: str) -> list[str]:
-    parts = [p.strip() for p in text.split(";")]
-    return [p for p in parts if p]
+    """Split on ';' that are not inside parentheses (balancer symbols)."""
+    parts: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    for char in text:
+        if char == "(":
+            depth += 1
+            buf.append(char)
+        elif char == ")":
+            depth = max(0, depth - 1)
+            buf.append(char)
+        elif char == ";" and depth == 0:
+            piece = "".join(buf).strip()
+            if piece:
+                parts.append(piece)
+            buf = []
+        else:
+            buf.append(char)
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 def _parse_haplotype(text: str) -> Haplotype:
@@ -92,7 +114,7 @@ def _parse_haplotype(text: str) -> Haplotype:
 def _parse_pair(segment: str, is_first: bool, sex: str) -> ChromosomePair:
     segment = segment.strip()
     if not segment:
-        raise ParseError("Empty chromosome segment")
+        raise ParseError(tr("parse_empty_segment"))
 
     if "/" in segment:
         left, right = segment.split("/", 1)
@@ -136,15 +158,15 @@ def parse_genotype(text: str, sex: str) -> Genotype:
     """
     sex = sex.lower().strip()
     if sex not in ("female", "male"):
-        raise ParseError("sex must be 'female' or 'male'")
+        raise ParseError(tr("parse_bad_sex"))
 
     cleaned = " ".join(text.replace("\n", " ").split())
     if not cleaned:
-        raise ParseError("Genotype text is empty")
+        raise ParseError(tr("parse_empty"))
 
     segments = _split_chromosomes(cleaned)
     if not segments:
-        raise ParseError("No chromosome segments found")
+        raise ParseError(tr("parse_no_segments"))
 
     pairs: list[ChromosomePair] = []
     for i, seg in enumerate(segments):
@@ -155,10 +177,7 @@ def parse_genotype(text: str, sex: str) -> Genotype:
         if first.role == SexChromRole.XY:
             mat, pat = first.homologs()
             if not (mat.is_y or pat.is_y):
-                raise ParseError(
-                    "Male sex chromosome should include Y (e.g. 'w / Y'). "
-                    "Hemizygous 'w' is also accepted and expanded to 'w / Y'."
-                )
+                raise ParseError(tr("parse_male_y"))
 
     return Genotype(pairs=tuple(pairs), sex=sex, raw=cleaned)
 
@@ -166,14 +185,11 @@ def parse_genotype(text: str, sex: str) -> Genotype:
 def genotypes_compatible(female: Genotype, male: Genotype) -> None:
     """Raise ParseError if chromosome counts differ."""
     if female.sex != "female":
-        raise ParseError("First parent must be female")
+        raise ParseError(tr("parse_first_female"))
     if male.sex != "male":
-        raise ParseError("Second parent must be male")
+        raise ParseError(tr("parse_second_male"))
     if len(female.pairs) != len(male.pairs):
-        raise ParseError(
-            f"Chromosome count mismatch: female has {len(female.pairs)}, "
-            f"male has {len(male.pairs)}"
-        )
+        raise ParseError(tr("parse_count", female=len(female.pairs), male=len(male.pairs)))
 
 
 def format_genotype_compact(gt: Genotype) -> str:
